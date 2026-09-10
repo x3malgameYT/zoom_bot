@@ -16,108 +16,81 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 UPDATE_URL = "https://gist.githubusercontent.com/x3malgameYT/3c47d1b60c0711d57a1320cfb751d48d/raw/zoom_bot_app.py"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
+AUTHOR = "VDteg111 / x3malgameYT"
 
 names_list = []
 stop_flag = False
 audio_wav_path = None
 drivers = []
 drivers_lock = threading.Lock()
-link_converted = False
 
 DEFAULT_LINK = "https://us05web.zoom.us/wc/join/87231148657?pwd=eeGAnxxYrmEyPpQjBCOnGpa31TjGSH.1"
 
-BG = "#0d0d0f"
-BG2 = "#16161a"
+BG = "#0a0a0d"
+BG2 = "#131318"
+BG3 = "#1a1a22"
 ACCENT = "#00e676"
+ACCENT_DIM = "#00b85c"
 ACCENT2 = "#2979ff"
 DANGER = "#ff1744"
 WARN = "#ff9100"
-TEXT = "#e0e0e0"
-TEXT_DIM = "#7a7a85"
-BORDER = "#25252c"
+PURPLE = "#7c4dff"
+TEXT = "#eaeaf0"
+TEXT_DIM = "#6a6a78"
+BORDER = "#23232c"
+BORDER_HL = "#2e2e3a"
 
-
-# ===== КОНВЕРТАЦИЯ ССЫЛКИ ZOOM =====
 
 def convert_zoom_link(raw):
-    """Превращает любую ссылку Zoom в формат веб-клиента /wc/join/."""
-    raw = raw.strip()
+    raw = raw.strip().strip('"').strip("'")
     if not raw:
         return None, "Пустая ссылка"
-
-    # Убираем кавычки и лишние символы
-    raw = raw.strip('"').strip("'").strip()
-
-    # Если уже wc/join — оставляем как есть
     if "/wc/join/" in raw:
         return raw, None
-
-    # Меняем /j/ на /wc/join/
     if "/j/" in raw:
-        converted = raw.replace("/j/", "/wc/join/")
-        return converted, None
-
-    # Ссылка без /j/ и /wc/ — пробуем найти ID конференции
+        return raw.replace("/j/", "/wc/join/"), None
     match = re.search(r"zoom\.us/(?:j|wc/join|s)/(\d+)", raw)
     if match:
         conf_id = match.group(1)
-        # Извлекаем pwd если есть
-        pwd_match = re.search(r"[?&]pwd=([^&]+)", raw)
-        base = raw.split("/j/")[0] if "/j/" in raw else "https://us05web.zoom.us"
-        # Определяем домен
         domain_match = re.search(r"(https?://[^/]+)", raw)
         domain = domain_match.group(1) if domain_match else "https://us05web.zoom.us"
+        pwd_match = re.search(r"[?&]pwd=([^&]+)", raw)
         new_url = f"{domain}/wc/join/{conf_id}"
         if pwd_match:
             new_url += f"?pwd={pwd_match.group(1)}"
         return new_url, None
-
     return None, "Не удалось распознать ссылку Zoom"
 
 
 def on_link_paste(event=None):
-    """Автоконвертация при вставке."""
     root.after(50, auto_convert_link)
 
 
 def auto_convert_link():
-    """Читает ссылку из поля и конвертирует, если нужно."""
-    global link_converted
     raw = link_text.get("1.0", tk.END).strip()
     if not raw:
         link_status.config(text="", fg=TEXT_DIM)
         return
-
-    # Уже сконвертировано — не трогаем
     if "/wc/join/" in raw:
         link_status.config(text="✓ Формат веб-клиента", fg=ACCENT)
-        link_converted = True
         return
-
     converted, err = convert_zoom_link(raw)
     if err:
         link_status.config(text=f"⚠ {err}", fg=WARN)
-        link_converted = False
         return
-
     if converted and converted != raw:
         link_text.delete("1.0", tk.END)
         link_text.insert("1.0", converted)
         link_status.config(text="✓ Ссылка сконвертирована", fg=ACCENT)
-        link_converted = True
-        log(f"[LINK] Сконвертировано: {converted[:60]}...")
+        log(f"[LINK] {converted[:70]}...")
     else:
         link_status.config(text="✓ Формат OK", fg=ACCENT)
-        link_converted = True
 
 
 def manual_convert():
-    """Кнопка ручной конвертации."""
     auto_convert_link()
 
-
-# ===== ЗАГРУЗКА ФАЙЛОВ =====
 
 def load_names():
     global names_list
@@ -131,7 +104,7 @@ def load_names():
         names_list = [line.strip() for line in f if line.strip()]
     if names_list:
         log(f"[+] Загружено имён: {len(names_list)}")
-        status_names.config(text=f"Имена: {len(names_list)}", fg=ACCENT)
+        status_names.config(text=f"● Имена: {len(names_list)}", fg=ACCENT)
     else:
         log("[!] Файл пуст")
 
@@ -144,7 +117,7 @@ def check_wav_format(path):
             sampwidth = w.getsampwidth() * 8
             log(f"[i] WAV: {rate} Hz, {sampwidth} bit, каналов: {channels}")
             if rate != 48000 or sampwidth != 16 or channels != 2:
-                log("[!] Формат не 48000/16/стерео — звук может не пойти")
+                log("[!] Формат не 48000/16/стерео")
                 return False
             return True
     except Exception as e:
@@ -160,23 +133,19 @@ def load_audio():
     )
     if not path:
         return
-
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     wav_path = os.path.join(base_dir, "bot_audio.wav")
     ext = os.path.splitext(path)[1].lower()
-
     if ext == ".wav":
         audio_wav_path = path
         log(f"[+] WAV загружен: {os.path.basename(path)}")
         check_wav_format(path)
-        status_audio.config(text=f"Аудио: {os.path.basename(path)[:20]}", fg=ACCENT)
+        status_audio.config(text=f"● Аудио: {os.path.basename(path)[:18]}", fg=ACCENT)
         return
-
     ffmpeg_cmd = "ffmpeg"
     local_ffmpeg = os.path.join(base_dir, "ffmpeg.exe")
     if os.path.exists(local_ffmpeg):
         ffmpeg_cmd = local_ffmpeg
-
     try:
         subprocess.run(
             [ffmpeg_cmd, "-y", "-i", path, "-ar", "48000", "-ac", "2",
@@ -184,9 +153,9 @@ def load_audio():
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         audio_wav_path = wav_path
-        log(f"[+] Сконвертировано в bot_audio.wav")
+        log("[+] Сконвертировано в bot_audio.wav")
         check_wav_format(wav_path)
-        status_audio.config(text="Аудио: bot_audio.wav", fg=ACCENT)
+        status_audio.config(text="● Аудио: bot_audio.wav", fg=ACCENT)
     except FileNotFoundError:
         log("[!] ffmpeg не найден")
     except Exception as e:
@@ -227,28 +196,32 @@ def refresh_bot_list():
     with drivers_lock:
         snapshot = list(drivers)
     if not snapshot:
-        tk.Label(bot_list_frame, text="Нет активных ботов", bg=BG, fg=TEXT_DIM,
-                 font=("Segoe UI", 10)).pack(anchor="w", padx=5)
-        status_bots.config(text="Ботов: 0", fg=TEXT_DIM)
+        tk.Label(bot_list_frame, text="  Нет активных ботов", bg=BG2, fg=TEXT_DIM,
+                 font=("Segoe UI", 10), anchor="w").pack(fill="x", padx=10, pady=8)
+        status_bots.config(text="● Ботов: 0", fg=TEXT_DIM)
         return
-    status_bots.config(text=f"Ботов: {len(snapshot)}", fg=ACCENT)
+    status_bots.config(text=f"● Ботов: {len(snapshot)}", fg=ACCENT)
     for entry in snapshot:
-        row = tk.Frame(bot_list_frame, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
-        row.pack(fill="x", pady=3)
-        tk.Label(row, text=f"  #{entry['id']}  {entry['name']}", bg=BG2, fg=TEXT,
-                 font=("Segoe UI", 10), width=28, anchor="w").pack(side="left", padx=5, pady=4)
-        tk.Button(row, text="MIC ON", command=lambda e=entry: mic_on_one(e),
-                  bg="#0a5", fg="white", font=("Segoe UI", 9, "bold"),
-                  width=10, bd=0, relief="flat").pack(side="left", padx=2)
-        tk.Button(row, text="MIC OFF", command=lambda e=entry: mic_off_one(e),
-                  bg=WARN, fg="white", font=("Segoe UI", 9, "bold"),
-                  width=10, bd=0, relief="flat").pack(side="left", padx=2)
-        tk.Button(row, text="MUSIC ▶", command=lambda e=entry: music_restart_one(e),
-                  bg=ACCENT2, fg="white", font=("Segoe UI", 9, "bold"),
-                  width=10, bd=0, relief="flat").pack(side="left", padx=2)
-        tk.Button(row, text="MUSIC ■", command=lambda e=entry: music_stop_one(e),
-                  bg="#a05", fg="white", font=("Segoe UI", 9, "bold"),
-                  width=10, bd=0, relief="flat").pack(side="left", padx=2)
+        row = tk.Frame(bot_list_frame, bg=BG3, highlightthickness=1,
+                       highlightbackground=BORDER_HL)
+        row.pack(fill="x", pady=3, padx=2)
+
+        tk.Label(row, text=f"  #{entry['id']}", bg=BG3, fg=PURPLE,
+                 font=("Segoe UI", 10, "bold"), width=5, anchor="w").pack(side="left", padx=(8, 0), pady=6)
+
+        tk.Label(row, text=entry['name'], bg=BG3, fg=TEXT,
+                 font=("Segoe UI", 10), width=22, anchor="w").pack(side="left", pady=6)
+
+        for text, cmd, color in [
+            ("MIC ON", lambda e=entry: mic_on_one(e), "#0a5"),
+            ("MIC OFF", lambda e=entry: mic_off_one(e), WARN),
+            ("MUSIC ▶", lambda e=entry: music_restart_one(e), ACCENT2),
+            ("MUSIC ■", lambda e=entry: music_stop_one(e), "#a05"),
+        ]:
+            tk.Button(row, text=text, command=cmd, bg=color, fg="white",
+                      font=("Segoe UI", 8, "bold"), bd=0, relief="flat",
+                      width=9, cursor="hand2",
+                      activebackground=color).pack(side="left", padx=2, pady=4)
 
 
 def mic_on_one(entry):
@@ -286,7 +259,7 @@ def mic_on_one(entry):
                     }
                 } catch(e) {}
             """)
-            log(f"[бот {bot_id}] MIC ON" + (" (кнопка)" if clicked else " (JS)"))
+            log(f"[бот {bot_id}] MIC ON" + (" ✓" if clicked else " (JS)"))
         except Exception as e:
             log(f"[бот {bot_id}] MIC ON ошибка: {e}")
     threading.Thread(target=worker, daemon=True).start()
@@ -321,7 +294,7 @@ def mic_off_one(entry):
                     }
                 } catch(e) {}
             """)
-            log(f"[бот {bot_id}] MIC OFF" + (" (кнопка)" if clicked else " (JS)"))
+            log(f"[бот {bot_id}] MIC OFF" + (" ✓" if clicked else " (JS)"))
         except Exception as e:
             log(f"[бот {bot_id}] MIC OFF ошибка: {e}")
     threading.Thread(target=worker, daemon=True).start()
@@ -418,7 +391,6 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
     global stop_flag
     if stop_flag:
         return
-
     name = random.choice(names_list)
     log(f"[Бот {bot_id}] Запуск: {name}")
 
@@ -427,7 +399,6 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
     os.makedirs(profile_dir, exist_ok=True)
 
     chrome_path = find_chrome()
-
     opts = Options()
     if chrome_path:
         opts.binary_location = chrome_path
@@ -515,7 +486,6 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
 
         while not stop_flag:
             time.sleep(2)
-
     except Exception as e:
         log(f"[Бот {bot_id}] Ошибка: {e}")
     finally:
@@ -535,7 +505,6 @@ def start_all():
         drivers.clear()
     refresh_bot_list()
 
-    # Автоконвертация перед запуском
     auto_convert_link()
     link = link_text.get("1.0", tk.END).strip()
 
@@ -543,7 +512,7 @@ def start_all():
         messagebox.showerror("Ошибка", "Введите ссылку на урок")
         return
     if "/wc/join/" not in link:
-        messagebox.showerror("Ошибка", "Ссылка не в формате веб-клиента.\nПроверьте поле ссылки.")
+        messagebox.showerror("Ошибка", "Ссылка не в формате веб-клиента")
         return
     if not names_list:
         messagebox.showerror("Ошибка", "Загрузите файл с именами")
@@ -575,12 +544,12 @@ def stop_all():
     global stop_flag
     stop_flag = True
     log("\n[!] Остановка...")
-    status_bots.config(text="Ботов: остановка...", fg=WARN)
+    status_bots.config(text="● Ботов: остановка...", fg=WARN)
 
 
 def do_update():
     if not UPDATE_URL:
-        messagebox.showinfo("Обновление", "Ссылка на обновление не задана (UPDATE_URL пустой).")
+        messagebox.showinfo("Обновление", "Ссылка на обновление не задана.")
         return
     try:
         log("[UPDATE] Скачиваю новую версию...")
@@ -588,7 +557,7 @@ def do_update():
         with urllib.request.urlopen(req, timeout=20) as r:
             new_code = r.read().decode("utf-8")
         if "def start_bot" not in new_code:
-            log("[UPDATE] Файл не похож на код программы, отмена")
+            log("[UPDATE] Файл не похож на код программы")
             return
         current_file = os.path.abspath(sys.argv[0])
         if current_file.endswith(".exe"):
@@ -597,68 +566,80 @@ def do_update():
             save_path = current_file
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(new_code)
-        log(f"[UPDATE] Новая версия сохранена: {save_path}")
+        log(f"[UPDATE] Сохранено: {save_path}")
         messagebox.showinfo("Обновление", f"Скачано.\n{save_path}\n\nПерезапустите приложение.")
     except Exception as e:
         log(f"[UPDATE] Ошибка: {e}")
         messagebox.showerror("Обновление", f"Не удалось:\n{e}")
 
 
-# ===== ИНТЕРФЕЙС =====
-
 root = tk.Tk()
 root.title(f"Zoom Bot v{VERSION}")
-root.geometry("880x900")
+root.geometry("900x940")
 root.configure(bg=BG)
-root.minsize(820, 720)
+root.minsize(860, 760)
 
-top = tk.Frame(root, bg=BG2, height=60)
+top = tk.Frame(root, bg=BG2, height=70)
 top.pack(fill="x")
 top.pack_propagate(False)
 
-tk.Label(top, text="⚡ ZOOM BOT", bg=BG2, fg=ACCENT,
-         font=("Segoe UI", 18, "bold")).pack(side="left", padx=20)
+tk.Label(top, text="⚡", bg=BG2, fg=ACCENT,
+         font=("Segoe UI", 22)).pack(side="left", padx=(20, 8))
+
+tk.Label(top, text="ZOOM BOT", bg=BG2, fg=TEXT,
+         font=("Segoe UI", 18, "bold")).pack(side="left")
 
 tk.Label(top, text=f"v{VERSION}", bg=BG2, fg=TEXT_DIM,
-         font=("Segoe UI", 10)).pack(side="left")
+         font=("Segoe UI", 10)).pack(side="left", padx=(10, 0))
 
 tk.Button(top, text="⟳ Обновить", command=do_update, bg=ACCENT2, fg="white",
           font=("Segoe UI", 10, "bold"), bd=0, relief="flat",
-          padx=15, pady=8).pack(side="right", padx=15)
+          padx=18, pady=8, cursor="hand2",
+          activebackground="#1e5fcc").pack(side="right", padx=20)
+
+author_bar = tk.Frame(root, bg=BG3, height=28)
+author_bar.pack(fill="x")
+author_bar.pack_propagate(False)
+
+tk.Label(author_bar, text=f"Автор: {AUTHOR}", bg=BG3, fg=TEXT_DIM,
+         font=("Segoe UI", 9, "italic")).pack(side="right", padx=20, pady=5)
+
+tk.Label(author_bar, text="● Online", bg=BG3, fg=ACCENT,
+         font=("Segoe UI", 9)).pack(side="left", padx=20, pady=5)
 
 status_frame = tk.Frame(root, bg=BG)
 status_frame.pack(fill="x", padx=20, pady=(15, 5))
 
-status_names = tk.Label(status_frame, text="Имена: не загружены", bg=BG, fg=TEXT_DIM,
+status_names = tk.Label(status_frame, text="● Имена: не загружены", bg=BG, fg=TEXT_DIM,
                         font=("Segoe UI", 10))
 status_names.pack(side="left", padx=(0, 20))
 
-status_audio = tk.Label(status_frame, text="Аудио: не загружено", bg=BG, fg=TEXT_DIM,
+status_audio = tk.Label(status_frame, text="● Аудио: не загружено", bg=BG, fg=TEXT_DIM,
                         font=("Segoe UI", 10))
 status_audio.pack(side="left", padx=(0, 20))
 
-status_bots = tk.Label(status_frame, text="Ботов: 0", bg=BG, fg=TEXT_DIM,
+status_bots = tk.Label(status_frame, text="● Ботов: 0", bg=BG, fg=TEXT_DIM,
                        font=("Segoe UI", 10))
 status_bots.pack(side="left")
 
-# Ссылка
-tk.Label(root, text="Ссылка на урок (вставьте любую — конвертируется сама):", bg=BG, fg=TEXT,
-         font=("Segoe UI", 10)).pack(anchor="w", padx=20, pady=(10, 5))
+tk.Label(root, text="ССЫЛКА НА УРОК", bg=BG, fg=TEXT_DIM,
+         font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=20, pady=(15, 3))
 
 link_row = tk.Frame(root, bg=BG)
 link_row.pack(fill="x", padx=20)
 
 link_text = tk.Text(link_row, height=2, font=("Segoe UI", 10), wrap="word",
                     bg=BG2, fg=TEXT, insertbackground=ACCENT, bd=0,
-                    highlightthickness=1, highlightbackground=BORDER)
+                    highlightthickness=1, highlightbackground=BORDER,
+                    highlightcolor=ACCENT)
 link_text.insert("1.0", DEFAULT_LINK)
 link_text.pack(side="left", fill="x", expand=True)
 
 tk.Button(link_row, text="Convert", command=manual_convert, bg=ACCENT2, fg="white",
           font=("Segoe UI", 9, "bold"), bd=0, relief="flat",
-          padx=10).pack(side="left", padx=(8, 0))
+          padx=14, cursor="hand2",
+          activebackground="#1e5fcc").pack(side="left", padx=(8, 0))
 
-# Привязка событий вставки и потери фокуса
 link_text.bind("<Control-v>", on_link_paste)
 link_text.bind("<Control-V>", on_link_paste)
 link_text.bind("<ButtonRelease-3>", on_link_paste)
@@ -667,73 +648,89 @@ link_text.bind("<FocusOut>", on_link_paste)
 link_status = tk.Label(root, text="", bg=BG, fg=TEXT_DIM, font=("Segoe UI", 9))
 link_status.pack(anchor="w", padx=20, pady=(2, 0))
 
-# Количество
+tk.Label(root, text="НАСТРОЙКИ", bg=BG, fg=TEXT_DIM,
+         font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=20, pady=(15, 3))
+
 row_count = tk.Frame(root, bg=BG)
-row_count.pack(fill="x", padx=20, pady=(10, 5))
+row_count.pack(fill="x", padx=20)
+
 tk.Label(row_count, text="Количество ботов:", bg=BG, fg=TEXT,
          font=("Segoe UI", 10)).pack(side="left")
-count_entry = tk.Entry(row_count, width=10, font=("Segoe UI", 10),
-                       bg=BG2, fg=TEXT, insertbackground=ACCENT, bd=0,
-                       highlightthickness=1, highlightbackground=BORDER)
+
+count_entry = tk.Entry(row_count, width=8, font=("Segoe UI", 11, "bold"),
+                       bg=BG2, fg=ACCENT, insertbackground=ACCENT, bd=0,
+                       highlightthickness=1, highlightbackground=BORDER,
+                       justify="center")
 count_entry.insert(0, "10")
-count_entry.pack(side="left", padx=10)
+count_entry.pack(side="left", padx=10, ipady=4)
 
 eco_var = tk.BooleanVar(value=False)
 headless_var = tk.BooleanVar(value=False)
 
-tk.Checkbutton(row_count, text="Экономный", variable=eco_var, bg=BG, fg=TEXT,
+tk.Checkbutton(row_count, text="Экономный режим", variable=eco_var, bg=BG, fg=TEXT,
                selectcolor=BG2, activebackground=BG, activeforeground=ACCENT,
-               font=("Segoe UI", 10)).pack(side="left", padx=(20, 10))
+               font=("Segoe UI", 10)).pack(side="left", padx=(30, 10))
 
 tk.Checkbutton(row_count, text="Headless", variable=headless_var, bg=BG, fg=TEXT,
                selectcolor=BG2, activebackground=BG, activeforeground=ACCENT,
                font=("Segoe UI", 10)).pack(side="left")
 
-btn_frame = tk.Frame(root, bg=BG)
-btn_frame.pack(pady=15)
 
-def mk_btn(parent, text, cmd, color, w=16):
+def mk_btn(parent, text, cmd, color, w=16, hover=None):
+    if hover is None:
+        hover = color
     return tk.Button(parent, text=text, command=cmd, bg=color, fg="white",
                      font=("Segoe UI", 10, "bold"), bd=0, relief="flat",
-                     width=w, height=2, cursor="hand2")
+                     width=w, height=2, cursor="hand2",
+                     activebackground=hover, activeforeground="white")
 
-mk_btn(btn_frame, "📁 Загрузить имена", load_names, "#333").pack(side="left", padx=5)
-mk_btn(btn_frame, "🎵 Загрузить аудио", load_audio, "#553").pack(side="left", padx=5)
-mk_btn(btn_frame, "▶ Запустить", start_all, "#0a7").pack(side="left", padx=5)
-mk_btn(btn_frame, "■ Остановить", stop_all, "#a00").pack(side="left", padx=5)
+
+btn_frame = tk.Frame(root, bg=BG)
+btn_frame.pack(pady=20)
+
+mk_btn(btn_frame, "📁 Имена", load_names, "#2a2a35").pack(side="left", padx=5)
+mk_btn(btn_frame, "🎵 Аудио", load_audio, "#2a2a35").pack(side="left", padx=5)
+mk_btn(btn_frame, "▶ ЗАПУСТИТЬ", start_all, ACCENT_DIM, 18).pack(side="left", padx=5)
+mk_btn(btn_frame, "■ СТОП", stop_all, DANGER, 12).pack(side="left", padx=5)
+
+tk.Label(root, text="УПРАВЛЕНИЕ ВСЕМИ БОТАМИ", bg=BG, fg=TEXT_DIM,
+         font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=20)
 
 ctrl_frame = tk.Frame(root, bg=BG)
-ctrl_frame.pack(pady=(0, 10))
+ctrl_frame.pack(pady=(8, 5))
 mk_btn(ctrl_frame, "🎤 MIC ON всем", enable_mic_all, "#0a5", 20).pack(side="left", padx=5)
 mk_btn(ctrl_frame, "🔇 MIC OFF всем", disable_mic_all, WARN, 20).pack(side="left", padx=5)
 
 ctrl_frame2 = tk.Frame(root, bg=BG)
 ctrl_frame2.pack(pady=(0, 15))
-mk_btn(ctrl_frame2, "▶ Музыка заново всем", restart_music_all, ACCENT2, 20).pack(side="left", padx=5)
-mk_btn(ctrl_frame2, "■ Стоп музыку всем", stop_music_all, "#a05", 20).pack(side="left", padx=5)
+mk_btn(ctrl_frame2, "▶ Музыка заново", restart_music_all, ACCENT2, 20).pack(side="left", padx=5)
+mk_btn(ctrl_frame2, "■ Стоп музыку", stop_music_all, "#a05", 20).pack(side="left", padx=5)
 
-tk.Label(root, text="Отдельное управление:", bg=BG, fg=TEXT,
-         font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=20)
+tk.Label(root, text="ОТДЕЛЬНОЕ УПРАВЛЕНИЕ", bg=BG, fg=TEXT_DIM,
+         font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=20)
 
-bot_list_frame = tk.Frame(root, bg=BG)
+bot_list_frame = tk.Frame(root, bg=BG2, highlightthickness=1,
+                          highlightbackground=BORDER)
 bot_list_frame.pack(fill="x", padx=20, pady=(5, 10))
 
-output_box = scrolledtext.ScrolledText(root, bg="#0a0a0c", fg=ACCENT,
+output_box = scrolledtext.ScrolledText(root, bg="#07070a", fg=ACCENT,
                                         font=("Consolas", 10), bd=0,
                                         highlightthickness=1,
-                                        highlightbackground=BORDER)
-output_box.pack(padx=20, pady=(0, 20), fill="both", expand=True)
+                                        highlightbackground=BORDER,
+                                        insertbackground=ACCENT)
+output_box.pack(padx=20, pady=(0, 10), fill="both", expand=True)
+
+bottom = tk.Frame(root, bg=BG3, height=26)
+bottom.pack(fill="x", side="bottom")
+bottom.pack_propagate(False)
+tk.Label(bottom, text=f"© {AUTHOR}  •  Zoom Bot v{VERSION}",
+         bg=BG3, fg=TEXT_DIM, font=("Segoe UI", 8)).pack(pady=5)
 
 refresh_bot_list()
 
 log(f"=== Zoom Bot v{VERSION} ===")
-log("Автоконвертация ссылки включена — вставляйте любую ссылку Zoom")
-log("1. Загрузите имена (names.txt)")
-log("2. Загрузите WAV 48000 Hz")
-log("3. Укажите количество")
-log("4. Нажмите 'Запустить'\n")
+log(f"Автор: {AUTHOR}")
+log("Автоконвертация ссылки включена\n")
 
-# Автоконвертация ссылки по умолчанию
 root.after(200, auto_convert_link)
-
 root.mainloop()
