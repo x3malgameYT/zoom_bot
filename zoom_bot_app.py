@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-UPDATE_URL = ""
+UPDATE_URL = "https://gist.githubusercontent.com/x3malgameYT/3c47d1b60c0711d57a1320cfb751d48d/raw/zoom_bot_app.py"
 VERSION = "1.1.0"
 
 names_list = []
