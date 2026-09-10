@@ -11,12 +11,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 UPDATE_URL = "https://gist.githubusercontent.com/x3malgameYT/3c47d1b60c0711d57a1320cfb751d48d/raw/zoom_bot_app.py"
-VERSION = "1.2.0"
+VERSION = "1.2.2"
 AUTHOR = "VDteg111 / x3malgameYT"
 
 names_list = []
@@ -40,6 +41,19 @@ TEXT = "#eaeaf0"
 TEXT_DIM = "#6a6a78"
 BORDER = "#23232c"
 BORDER_HL = "#2e2e3a"
+
+CHROME_PATHS = [
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    os.path.expanduser(r"~\AppData\Local\Google\Chrome\Application\chrome.exe"),
+]
+
+
+def find_chrome():
+    for p in CHROME_PATHS:
+        if os.path.exists(p):
+            return p
+    return None
 
 
 def convert_zoom_link(raw):
@@ -167,18 +181,6 @@ def log(text):
     output_box.see(tk.END)
 
 
-def find_chrome():
-    paths = [
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        os.path.expanduser(r"~\AppData\Local\Google\Chrome\Application\chrome.exe"),
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return p
-    return None
-
-
 def click_if_exists(driver, xpath, timeout=3):
     try:
         el = WebDriverWait(driver, timeout).until(
@@ -205,13 +207,10 @@ def refresh_bot_list():
         row = tk.Frame(bot_list_frame, bg=BG3, highlightthickness=1,
                        highlightbackground=BORDER_HL)
         row.pack(fill="x", pady=3, padx=2)
-
         tk.Label(row, text=f"  #{entry['id']}", bg=BG3, fg=PURPLE,
                  font=("Segoe UI", 10, "bold"), width=5, anchor="w").pack(side="left", padx=(8, 0), pady=6)
-
         tk.Label(row, text=entry['name'], bg=BG3, fg=TEXT,
                  font=("Segoe UI", 10), width=22, anchor="w").pack(side="left", pady=6)
-
         for text, cmd, color in [
             ("MIC ON", lambda e=entry: mic_on_one(e), "#0a5"),
             ("MIC OFF", lambda e=entry: mic_off_one(e), WARN),
@@ -394,14 +393,20 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
     name = random.choice(names_list)
     log(f"[Бот {bot_id}] Запуск: {name}")
 
+    chrome_exe = find_chrome()
+    if not chrome_exe:
+        log(f"[Бот {bot_id}] Chrome не найден! Установите Google Chrome.")
+        return
+    log(f"[Бот {bot_id}] Chrome: {chrome_exe}")
+
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    profile_dir = os.path.join(base_dir, "profiles", f"bot_{bot_id}_{random.randint(100000, 999999)}")
+    profiles_root = os.path.join(base_dir, "profiles")
+    os.makedirs(profiles_root, exist_ok=True)
+    profile_dir = os.path.join(profiles_root, f"bot_{bot_id}_{random.randint(100000, 999999)}")
     os.makedirs(profile_dir, exist_ok=True)
 
-    chrome_path = find_chrome()
     opts = Options()
-    if chrome_path:
-        opts.binary_location = chrome_path
+    opts.binary_location = chrome_exe
 
     opts.add_argument("--use-fake-ui-for-media-stream")
     opts.add_argument("--use-fake-device-for-media-stream")
@@ -414,7 +419,6 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
     opts.add_argument("--no-first-run")
     opts.add_argument("--no-default-browser-check")
     opts.add_argument(f"--user-data-dir={profile_dir}")
-    opts.add_argument(f"--profile-directory=Profile{bot_id}")
     opts.add_argument("--disable-audio-track-processing")
     opts.add_argument("--disable-features=AudioServiceOutOfProcess")
     opts.add_argument("--enable-exclusive-audio")
@@ -457,10 +461,32 @@ def start_bot(bot_id, link, eco_mode, headless_mode, wav_path):
         opts.add_argument("--headless=new")
         opts.add_argument("--window-size=400,300")
 
+    driver = None
     try:
         driver = webdriver.Chrome(options=opts)
-    except Exception as e:
-        log(f"[Бот {bot_id}] Ошибка запуска Chrome: {e}")
+    except Exception as e1:
+        log(f"[Бот {bot_id}] Попытка 1 не удалась: {e1}")
+        try:
+            local_driver = os.path.join(base_dir, "chromedriver.exe")
+            if os.path.exists(local_driver):
+                service = ChromeService(executable_path=local_driver)
+                driver = webdriver.Chrome(service=service, options=opts)
+                log(f"[Бот {bot_id}] Использован локальный chromedriver.exe")
+            else:
+                try:
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    service = ChromeService(ChromeDriverManager().install())
+                    driver = webdriver.Chrome(service=service, options=opts)
+                    log(f"[Бот {bot_id}] Драйвер скачан через webdriver-manager")
+                except Exception as e3:
+                    log(f"[Бот {bot_id}] Ошибка запуска Chrome: {e3}")
+                    return
+        except Exception as e2:
+            log(f"[Бот {bot_id}] Ошибка запуска Chrome: {e2}")
+            return
+
+    if driver is None:
+        log(f"[Бот {bot_id}] Не удалось создать драйвер")
         return
 
     entry = {"id": bot_id, "driver": driver, "name": name}
